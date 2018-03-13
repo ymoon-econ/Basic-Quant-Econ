@@ -1,15 +1,19 @@
+global sigmae rho m alpha delta eta b beta
+
 sigmae=0.0034;
 rho=0.98;
-m=2;
+m=2;                    % arbitrary choice between 2 and 4
 alpha=0.72;
 delta=0.1;
 eta=0.72;
 b=0.4;
 beta=0.99;
-n=30; % Number of grid points
+n=30;                   % Number possible realizations of the process of z
 %Discretizing an AR(1) process of productivity shocks
 %logZ(t)=rho*logZ(t-1)+sigmae*Et 
-%(where Et is the error term following a normal distribution (0,1)
+%where Et is the error term following a normal distribution (0,1)
+% Then, sigmae*Et follows a normal distribution (0, sigmae^2)
+
 
 %Tauchen Method
 zn=m*(sigmae)./sqrt(1-rho^2);
