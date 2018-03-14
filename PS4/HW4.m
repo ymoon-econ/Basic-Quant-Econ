@@ -1,3 +1,5 @@
+% written by Priyam
+
 global sigmae rho m alpha delta eta b beta
 
 sigmae=0.0034;
