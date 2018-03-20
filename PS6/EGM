@@ -1,0 +1,106 @@
+% EGM with equally spaced gridpoints
+
+
+clear all;
+format compact
+
+% Model parameters
+rho   = 0.92;
+sigma = 0.2;
+betta = 0.95;
+sig   = 5;
+Ybar  = 0;
+R     = 1.025;
+
+% Algorithm parameters
+ny         = 7;  % points for discretization of exogenous process
+na         = 50 ; 
+
+% ny         = 21;
+% na         = 150 ;
+
+y_ss       = Ybar;
+c_ss       = y_ss;
+%--------------------------------------------------------------------------
+% Grid construction
+%--------------------------------------------------------------------------
+
+[PI,YY] = rouwen(rho,Ybar,sigma,ny); 
+YY=exp(YY);
+
+% borrowing constraint, a'>= -aBAR        
+aBAR=0
+
+% finish constructing the grid over the endogenous state (here a')
+ap   = linspace(-aBAR,10,na)' ;     % creates equidistant grid in a'
+
+% Main loop
+
+
+n   = ones(1,length(YY));
+nn  = ones(na,1);
+
+app = ap*n;                     % starting values for policy fct. guess for a''(a',y')
+a   = ap*n;                     % initialize vector for a grid
+
+dif=1;
+countround=1;
+crit=1e-6;
+
+tic
+
+% start main loop that iterates over the policy function, until fixed point is reached
+while dif>crit
+
+    aold=a;
+
+    % Calculate the conditional expectation of Euler equations as a functions of a'
+    CE_EE=zeros(na,ny);
+    for iy = 1:ny;
+        for ia_prime = 1:na;
+            for iy_prime = 1:ny;
+                cp  = YY(iy_prime,1) + R*ap(ia_prime,1) - max(-aBAR,app(ia_prime,iy_prime));
+                CE_EE(ia_prime,iy)  = CE_EE(ia_prime,iy)  + betta*PI(iy,iy_prime)*cp.^(-sig);
+             
+            end
+        end
+    end
+    % now I have the conditional expectation of the Euler equation, CE_EE(a',y), at each gridpoint for a' 
+
+    % compute a:                
+    for iy = 1:ny;
+        for ia=1:na;
+            c = (R * CE_EE(ia,iy) )^(-1/sig);              % consumption at gridpoint (a',y')
+            a(ia,iy) =  ( c - YY(iy,1) + ap(ia,1) ) / R;   % implied value of a at gridpoint (a',y') and under current policy fct guess app(a',y')
+           
+        end
+    end
+    
+
+    
+    % Update the policy function:
+    for iy = 1:ny;
+        app(:,iy)=interp1(a(:,iy),ap,'linear','extrap');
+         
+    end
+    
+    
+    dif=max(max(abs(a-aold)./(1+abs(aold))));
+    countround=countround+1;
+    disp(sprintf('Iteration: %d\tConv. crit.: %g',countround,dif));    
+    
+end % while dif
+
+
+        
+            
+            
+
+% Get consumption policy rule, computed from the found app
+
+cp=zeros(na,ny);
+for iy_prime=1:ny
+   cp(:,iy_prime)  = nn*YY(iy_prime,1) + R *ap(:,1) - max(-aBAR,app(:,iy_prime));
+end
+    
+toc
