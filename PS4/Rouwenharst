@@ -1,0 +1,199 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%This is the main file for running simulations. It calls two other files "hitm_z" and "rouwen" which are written after this
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% Approximate an AR(1) process estimated from data by a discrete Markov chain.
+% Assume that output follows an AR(1) process that can be estimated from
+% the data
+clear all
+rho= .92;        % persistence
+sigmaeps=0.2;
+sigmay= sqrt(sigmaeps^2 / (1 - rho^2));      % std dev of income
+nY2= 7;          % size of grid on the output process
+
+% [y2, PI2] = tauchen(nY2,rho2,sigmaeps,3)
+% y2=y2';
+% N=1000;
+% ydiscT = hitm_z(y2, PI2,rand(N,1));
+% plot(ydiscT(1:1000))
+% xlabel('Period, t')
+% ylabel('ln(z_t)')
+% title('Tauchen, \rho=0.98 and \sigma \epsilon =0.003')
+
+% AR(1) continuous
+% w=0;
+% p=1;
+% n=1000;
+% ndisc=0;
+% v=arsim(w,rho2,sigmaeps,n,ndisc);
+% plot(v(1:1000))
+% xlabel('Period, t')
+% ylabel('ln(z_t)')
+% title('An AR(1) process with \rho=0.98 and \sigma \epsilon =0.003')
+
+
+
+[P, y] = rouwen(rho, 0, sigmay, nY2);
+N=1000;
+% ydisc = hitm_z(z, P,randn(N));
+ydiscR = hitm_z(y, P,rand(N,1));
+plot(ydiscR(1:1000))
+xlabel('Period, t')
+ylabel('ln(y_t)')
+title('Rowenhorst, \rho=0.92 and \sigma \epsilon =0.2')
+T=autocorr(ydiscR,1);
+V=std(ydiscR);
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+This is the code for rouwen
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [P_Rouw, z_Rouw] = rouwen(rho_Rouw, mu_uncond, sig_uncond, n_R)
+%ROUWEN   Rouwenhorst's method (1995) to approximate an AR(1) process using 
+%   a  finite state Markov process. 
+%
+%   For details, see Rouwenhorst, G., 1995: Asset pricing  implications of 
+%   equilibrium business cycle models, in Thomas Cooley (ed.), Frontiers of 
+%   Business Cycle Research, Princeton University Press, Princeton, NJ.
+% 
+%   Suppose we need to approximate the following AR(1) process:
+%
+%                   y'=rho_Rouw*y+e
+%
+%   where abs(rho_Rouw)<1, sig_uncond=std(e)/sqrt(1-rho_Rouw^2) and 
+%   mu_uncond denotes E(y), the unconditional mean of y. Let n_R be the 
+%   number of grid points. n_R must be a positive integer greater than one.  
+%
+%   [P_Rouw, z_Rouw] = rouwen(rho_Rouw, mu_uncond, sig_uncond, n_R) returns  
+%   the discrete state space of n_R grid points for y, z_Rouw, and 
+%   the centrosymmetric transition matrix P_Rouw. Note that
+%
+%       1. z_Rouw is a column vector of n_R real numbers. 
+%       2. The (i,j)-th element of P_Rouw is the conditional probability 
+%          Prob(y'=z_Rouw(i)|y=z_Rouw(j)), i.e.
+%
+%                 P_Rouw(i,j)=Prob(y'=z_Rouw(i)|y=z_Rouw(j))
+%
+%           where z_i is the i-th element of vector z_Rouw. Therefore 
+%
+%           P_Rouw(1,j)+P_Rouw(2,j)+ ... +P_Rouw(n,j)=1 for all j.
+%   
+%   See also HITM_Z and HITM_S on how to simulate a Markov processes using 
+%   a transition matrix and the grids. 
+%
+%   Damba Lkhagvasuren, June 2005
+
+% CHECK IF abs(rho)<=1 
+if abs(rho_Rouw)>1
+    error('The persistence parameter, rho, must be less than one in absolute value.');
+end
+
+% CHECK IF n_R IS AN INTEGER GREATER THAN ONE.
+if n_R <1.50001 %| mod(n_R,1)~=0 
+    error('For the method to work, the number of grid points (n_R) must be an integer greater than one.');  
+end
+
+% CHECK IF n_R IS AN INTEGER.
+if mod(n_R,1)~=0 
+    warning('the number of the grid points passed to ROUWEN is not an integer. The method rounded n_R to its nearest integer.')
+    n_R=round(n_R);
+    disp('n_R=');
+    disp(n_R);  
+end
+
+% GRIDS
+step_R = sig_uncond*sqrt(n_R - 1); 
+z_Rouw=[-1:2/(n_R-1):1]';
+z_Rouw=mu_uncond+step_R*z_Rouw;
+
+% CONSTRUCTION OF THE TRANSITION PROBABILITY MATRIX
+p=(rho_Rouw + 1)/2;
+q=p;
+
+P_Rouw=[ p  (1-p);
+        (1-q) q];
+    
+    for i_R=2:n_R-1
+    a1R=[P_Rouw zeros(i_R, 1); zeros(1, i_R+1)];
+    a2R=[zeros(i_R, 1) P_Rouw; zeros(1, i_R+1)];
+    a3R=[zeros(1,i_R+1); P_Rouw zeros(i_R,1)];
+    a4R=[zeros(1,i_R+1); zeros(i_R,1) P_Rouw];
+    P_Rouw=p*a1R+(1-p)*a2R+(1-q)*a3R+q*a4R;
+    P_Rouw(2:i_R, :) = P_Rouw(2:i_R, :)/2;
+    end
+    
+P_Rouw=P_Rouw';
+
+for i_R = 1:n_R
+    P_Rouw(:,i_R) = P_Rouw(:,i_R)/sum(P_Rouw(:,i_R));
+end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+hitm_z
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function zdis = hitm_z(z,PPP,a1)
+%HITM_Z simulates a finite state autoregressive time series using the 
+%   pre-specified grid points and the associated transition matrix.
+%
+%                ydisc = hitm_z(z, PPP,a1)
+%
+%   where 
+%
+%       z - a column vector of the grid points,
+%       PPP - the associated transition matrix,
+%       a1 - a column vector of random numbers drawn from the standard 
+%            uniform distribution on the interval(0,1), and
+%       ydisc - the simulated time series. 
+%
+%   The length of the time series is given by the size of a1, i.e. if a1 is 
+%   an Nx1 column vector of the random numbers, the size of ydisc is Nx1. 
+%
+%   Examples:
+%   N=100; ydisc = hitm_z(z, PPP,rand(N,1))
+%   or 
+%   b=rand(100,1); ydisc = hitm_z(z, PPP,b);
+%
+%   Note that the method assumes that (i,j)-th element of PPP is the 
+%   conditional probability Prob(state(t+1)=i|state(t)=j), i.e.
+%
+%                 PPP(i,j)=Prob(state(t+1)=i|state(t)=j)
+%
+%   where i and j denote the numbers of the states. Therefore 
+%
+%           PPP(1,j)+PPP(2,j)+ ... +PPP(n,j)=1, for all j.
+%   See also HITM_S.  
+%   Damba Lkhagvasuren, June 2005
+
+N=size(a1,1);
+znum=size(PPP,1);
+
+A=tril(ones(znum))*PPP; A(znum,:)=2;
+
+des=zeros(N,1);
+
+ainit=randperm(znum);
+des(1,1)=ainit(1,1);
+destemp=des(1,1);
+
+for c_ount=2:N;
+        
+          if a1(c_ount,1)<=A(1,destemp);
+            des(c_ount,1)=1;
+          end ;
+          
+          for i=1:znum-1;
+              if A(i,destemp)<a1(c_ount,1)
+                  if A(i+1,destemp)>=a1(c_ount,1);
+                      des(c_ount,1)=i+1;
+                  end
+              end
+          end
+          destemp=des(c_ount,1);
+end;
+
+zdis=z(des);
